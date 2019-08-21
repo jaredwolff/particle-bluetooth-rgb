@@ -26,13 +26,13 @@ system_tick_t lastMeasurementMs = 0;
 BleCharacteristic batteryLevelCharacteristic;
 
 // UUIDs for service + characteristics
-const char* serviceUuid = "b4250400-fb4b-4746-b2b0-93f0e61122c6"; //service
-const char* red         = "b4250401-fb4b-4746-b2b0-93f0e61122c6"; //red char
-const char* green       = "b4250402-fb4b-4746-b2b0-93f0e61122c6"; //green char
-const char* blue        = "b4250403-fb4b-4746-b2b0-93f0e61122c6"; //blue char
+const char* rgbServiceUuid = "b4250400-fb4b-4746-b2b0-93f0e61122c6"; //service
+const char* red            = "b4250401-fb4b-4746-b2b0-93f0e61122c6"; //red char
+const char* green          = "b4250402-fb4b-4746-b2b0-93f0e61122c6"; //green char
+const char* blue           = "b4250403-fb4b-4746-b2b0-93f0e61122c6"; //blue char
 
 // Set the RGB BLE service
-BleUuid rgbService(serviceUuid);
+BleUuid rgbService(rgbServiceUuid);
 
 // Variables for keeping state
 typedef struct {
@@ -147,9 +147,9 @@ void setup() {
   Mesh.subscribe("blue",meshHandler);
 
   // Set up characteristics
-  BleCharacteristic redCharacteristic("red", BleCharacteristicProperty::WRITE_WO_RSP, red, serviceUuid, onDataReceived, (void*)red);
-  BleCharacteristic greenCharacteristic("green", BleCharacteristicProperty::WRITE_WO_RSP, green, serviceUuid, onDataReceived, (void*)green);
-  BleCharacteristic blueCharacteristic("blue", BleCharacteristicProperty::WRITE_WO_RSP, blue, serviceUuid, onDataReceived, (void*)blue);
+  BleCharacteristic redCharacteristic("red", BleCharacteristicProperty::WRITE_WO_RSP, red, rgbServiceUuid, onDataReceived, (void*)red);
+  BleCharacteristic greenCharacteristic("green", BleCharacteristicProperty::WRITE_WO_RSP, green, rgbServiceUuid, onDataReceived, (void*)green);
+  BleCharacteristic blueCharacteristic("blue", BleCharacteristicProperty::WRITE_WO_RSP, blue, rgbServiceUuid, onDataReceived, (void*)blue);
   batteryLevelCharacteristic = BleCharacteristic ("bat", BleCharacteristicProperty::NOTIFY, batteryCharUUID, batteryServiceUUID);
 
   // Add the characteristics
@@ -162,8 +162,10 @@ void setup() {
   BleAdvertisingData advData;
 
   // Add the RGB LED service
-  advData.appendServiceUUID(batteryServiceUUID);
   advData.appendServiceUUID(rgbService);
+
+  // Add the battery service
+  advData.appendServiceUUID(batteryServiceUUID);
 
   // Start advertising!
   BLE.advertise(&advData);

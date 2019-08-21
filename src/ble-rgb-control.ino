@@ -1,11 +1,29 @@
 /*
  * Project ble-rgb-control
- * Description:
+ * Description: Control the onboard RGB led using BLE
  * Author: Jared Wolff
  * Date: 8/9/2019
  */
 
-//SYSTEM_MODE(MANUAL);
+SYSTEM_MODE(MANUAL);
+
+SerialLogHandler logHandler(115200, LOG_LEVEL_ERROR, {
+    { "app", LOG_LEVEL_ALL }, // enable all app messages
+});
+
+#define MAX_BATT_V 4.1
+#define MIN_BATT_V 3.1
+#define MEASUREMENT_INTERVAL_MS 10000
+
+// UUID for battery service
+BleUuid batteryServiceUUID = BleUuid(0x180F);
+BleUuid batteryCharUUID = BleUuid(0x2A19);
+
+// Timer for batt measurement
+system_tick_t lastMeasurementMs = 0;
+
+// Batt char
+BleCharacteristic batteryLevelCharacteristic;
 
 // UUIDs for service + characteristics
 const char* serviceUuid = "b4250400-fb4b-4746-b2b0-93f0e61122c6"; //service
@@ -78,8 +96,39 @@ static void onDataReceived(const uint8_t* data, size_t len, const BlePeerDevice&
 
 }
 
+void batteryProcess() {
+ // Reset if overflow
+  if( millis() < lastMeasurementMs ) {
+    lastMeasurementMs = millis();
+  }
+
+  // Check if it's time to make a measurement
+  if( millis() > (lastMeasurementMs + MEASUREMENT_INTERVAL_MS) ) {
+    lastMeasurementMs = millis();
+
+    float voltage = analogRead(BATT) * 0.0011224;
+    float normalized = (voltage-MIN_BATT_V)/(MAX_BATT_V-MIN_BATT_V) * 100;
+
+    // If normalized goes above or below the min/max, set to the min/max
+    if( normalized > 100 ) {
+      normalized = 100;
+    } else if( normalized < 0 ) {
+      normalized = 0;
+    }
+
+    // Set the battery value
+    batteryLevelCharacteristic.setValue((uint8_t)normalized);
+
+    // Print the results
+    Log.info("Batt level: %d", (uint8_t)normalized);
+
+  }
+}
+
 // setup() runs once, when the device is first turned on.
 void setup() {
+
+  (void)logHandler;
 
   // Enable app control of LED
   RGB.control(true);
@@ -101,16 +150,19 @@ void setup() {
   BleCharacteristic redCharacteristic("red", BleCharacteristicProperty::WRITE_WO_RSP, red, serviceUuid, onDataReceived, (void*)red);
   BleCharacteristic greenCharacteristic("green", BleCharacteristicProperty::WRITE_WO_RSP, green, serviceUuid, onDataReceived, (void*)green);
   BleCharacteristic blueCharacteristic("blue", BleCharacteristicProperty::WRITE_WO_RSP, blue, serviceUuid, onDataReceived, (void*)blue);
+  batteryLevelCharacteristic = BleCharacteristic ("bat", BleCharacteristicProperty::NOTIFY, batteryCharUUID, batteryServiceUUID);
 
   // Add the characteristics
   BLE.addCharacteristic(redCharacteristic);
   BLE.addCharacteristic(greenCharacteristic);
   BLE.addCharacteristic(blueCharacteristic);
+  BLE.addCharacteristic(batteryLevelCharacteristic);
 
   // Advertising data
   BleAdvertisingData advData;
 
   // Add the RGB LED service
+  advData.appendServiceUUID(batteryServiceUUID);
   advData.appendServiceUUID(rgbService);
 
   // Start advertising!
@@ -132,5 +184,8 @@ void loop() {
     Mesh.publish("green", String::format("%d", m_led_level.green));
     Mesh.publish("blue", String::format("%d", m_led_level.blue));
   }
+
+  // Check battery
+  batteryProcess();
 
 }
